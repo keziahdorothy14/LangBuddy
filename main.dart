@@ -21724,6 +21724,13 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Image.asset(
+            'assets/logo/langbuddy_logo.png',
+            fit: BoxFit.contain,
+          ),
+        ),
         title: RichText(
           text: const TextSpan(
             children: [
@@ -21789,7 +21796,7 @@ class _HomeScreenState extends State<HomeScreen> {
               // Choose Language Label
               Text(
                 "Choose Language",
-                style: const TextStyle(
+                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
