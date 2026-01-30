@@ -21724,7 +21724,36 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text("LangBuddy"),
+        title: RichText(
+          text: const TextSpan(
+            children: [
+              TextSpan(
+                text: "Lang",
+                style: TextStyle(
+                  color: Colors.blueAccent, // dark blue
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextSpan(
+                text: "Buddy",
+                style: TextStyle(
+                  color: Colors.orange, // orange
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextSpan(
+                text: "  -  Your friendly language learning companion",
+                style: TextStyle(
+                  color: Colors.greenAccent, // rest of text
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ],
+          ),
+        ),
         backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
         actions: [
           IconButton(
@@ -21760,8 +21789,8 @@ class _HomeScreenState extends State<HomeScreen> {
               // Choose Language Label
               Text(
                 "Choose Language",
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.titleMedium?.color,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
                 ),
@@ -22348,7 +22377,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: resetProgress,
               style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.redAccent),
-              child: const Text('Reset Progress'),
+              child: const Text(
+                'Reset Progress',
+                style: TextStyle(color: Colors.white),
+              ),
             ),
           ],
         ),
