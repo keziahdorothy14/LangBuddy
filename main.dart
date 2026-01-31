@@ -6,6 +6,26 @@ import 'dart:math';
 import 'dart:async';
 import 'package:confetti/confetti.dart'; // Add confetti animation
 
+// ================= GAME PROGRESS STORAGE =================
+Future<void> saveGameProgress(String gameName, int level) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setInt("progress_$gameName", level);
+}
+
+Future<int> loadGameProgress(String gameName) async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getInt("progress_$gameName") ?? 0;
+}
+
+Future<Map<String, int>> loadAllGameProgress(List<String> gameNames) async {
+  final prefs = await SharedPreferences.getInstance();
+  Map<String, int> progress = {};
+  for (var game in gameNames) {
+    progress[game] = prefs.getInt("progress_$game") ?? 0;
+  }
+  return progress;
+}
+
 const Map<String, String> ttsLanguages = {
   "English": "en-US",
   "French": "fr-FR",
@@ -21739,7 +21759,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextSpan(
                 text: "Lang",
                 style: TextStyle(
-                  color: Colors.blueAccent, // dark blue
+                  color: Colors.blueAccent,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -21747,7 +21767,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextSpan(
                 text: "Buddy",
                 style: TextStyle(
-                  color: Colors.orange, // orange
+                  color: Colors.orange,
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                 ),
@@ -21755,7 +21775,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TextSpan(
                 text: "  -  Your friendly language learning companion",
                 style: TextStyle(
-                  color: Colors.greenAccent, // rest of text
+                  color: Colors.greenAccent,
                   fontSize: 14,
                   fontWeight: FontWeight.w400,
                 ),
@@ -21863,8 +21883,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             () => open(context, QuizScreen(language: selectedLanguage))),
                     _buildCard(Icons.bar_chart, "Progress",
                             () => open(context, const ProgressScreen())),
-                    _buildCard(Icons.videogame_asset, "Games",
-                            () => open(context, const GamesScreen())),
+                    _buildCard(
+                      Icons.videogame_asset,
+                      "Games",
+                          () => open(
+                        context,
+                        GamesScreen(language: selectedLanguage), // ✅ pass language
+                      ),
+                    ),
+                    _buildCard(
+                      Icons.bar_chart,
+                      "Games Progress",
+                          () => open(
+                        context,
+                        GamesProgressCard(selectedLanguage: selectedLanguage), // ✅ pass language
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -22400,9 +22434,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-/* ================= GLOBAL SELECTED LANGUAGE ================= */
-String selectedLanguage = "French"; // Set this from homescreen
-
 /* ================= GAME ENGINE ================= */
 class GameEngine {
   static final _random = Random();
@@ -22424,7 +22455,7 @@ class GameEngine {
   static Map<String, dynamic> generateGuessWord(String language) {
     final words = getRandomWords(4);
     return {
-      "answer": words[0]['translations']["English"],
+      "answer": words[0]['translations'][language] ?? words[0]['word'],
       "options": words.map((w) => w['translations'][language] ?? w['word']).toList()
     };
   }
@@ -22432,7 +22463,7 @@ class GameEngine {
   static Map<String, dynamic> generateAudioGuess(String language) {
     final words = getRandomWords(4);
     return {
-      "answer": words[0]['translations']["English"],
+      "answer": words[0]['translations'][language] ?? words[0]['word'],
       "options": words.map((w) => w['translations'][language] ?? w['word']).toList(),
       "sound": "🔊 ${words[0]['translations'][language][0]}..."
     };
@@ -22441,25 +22472,26 @@ class GameEngine {
   static Map<String, dynamic> generateTimedQuiz(String language) {
     final words = getRandomWords(4);
     return {
-      "question": "What is the English word for ${words[0]['translations'][language]}?",
-      "answer": words[0]['translations']["English"],
-      "options": words.map((w) => w['translations']["English"]).toList()
+      "question": "Select the correct English translation for '${words[0]['translations'][language]}' ($language):",
+      "answer": words[0]['translations']["English"],  // correct answer is in English
+      "options": words.map((w) => w['translations']["English"]).toList()  // all options in English
     };
   }
 }
 
 /* ================= GAMES SCREEN ================= */
 class GamesScreen extends StatelessWidget {
-  const GamesScreen({super.key});
+  final String language;
+  const GamesScreen({super.key, required this.language});
 
   @override
   Widget build(BuildContext context) {
     final games = [
-      {"title": "Word Match", "widget": LevelGameWidget(gameType: "Word Match")},
-      {"title": "Guess the Word", "widget": LevelGameWidget(gameType: "Guess the Word")},
-      {"title": "Fill in the Blank", "widget": LevelGameWidget(gameType: "Fill in the Blank")},
-      {"title": "Audio Guess", "widget": LevelGameWidget(gameType: "Audio Guess")},
-      {"title": "Timed Quiz", "widget": LevelGameWidget(gameType: "Timed Quiz")},
+      {"title": "Word Match", "widget": LevelGameWidget(gameType: "Word Match", language: language)},
+      {"title": "Guess the Word", "widget": LevelGameWidget(gameType: "Guess the Word", language: language)},
+      {"title": "Fill in the Blank", "widget": LevelGameWidget(gameType: "Fill in the Blank", language: language)},
+      {"title": "Audio Guess", "widget": LevelGameWidget(gameType: "Audio Guess", language: language)},
+      {"title": "Timed Quiz", "widget": LevelGameWidget(gameType: "Timed Quiz", language: language)},
     ];
 
     return Scaffold(
@@ -22504,12 +22536,16 @@ class GamesScreen extends StatelessWidget {
 /* ================= LEVEL GAME WIDGET ================= */
 class LevelGameWidget extends StatefulWidget {
   final String gameType;
-  const LevelGameWidget({super.key, required this.gameType});
+  final String language;
+
+  const LevelGameWidget({super.key, required this.gameType, required this.language});
   @override
   State<LevelGameWidget> createState() => _LevelGameWidgetState();
 }
 
 class _LevelGameWidgetState extends State<LevelGameWidget> {
+  late FlutterTts flutterTts;
+  bool isSpeaking = false;
   int level = 1;
   int questionIndex = 0;
   int score = 0;
@@ -22526,33 +22562,68 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
 
   late ConfettiController _confettiController;
 
+  String languageCode() {
+    switch (widget.language) {
+      case "English": return "en-US";
+      case "French": return "fr-FR";
+      case "German": return "de-DE";
+      case "Spanish": return "es-ES";
+      case "Hindi": return "hi-IN";
+      case "Italian": return "it-IT";
+      case "Portuguese": return "pt-PT";
+      case "Russian": return "ru-RU";
+      case "Chinese": return "zh-CN";
+      case "Japanese": return "ja-JP";
+      case "Korean": return "ko-KR";
+      case "Dutch": return "nl-NL";
+      case "Turkish": return "tr-TR";
+      case "Vietnamese": return "vi-VN";
+      case "Indonesian": return "id-ID";
+      default: return "en-US";
+    }
+  }
   @override
   void initState() {
     super.initState();
+    flutterTts = FlutterTts();
+    flutterTts.setSpeechRate(0.4);
     _confettiController = ConfettiController(duration: const Duration(seconds: 2));
     generateLevelQuestions();
+  }
+
+  Future<void> speakOnce(String word) async {
+    if (isSpeaking) return;
+
+    isSpeaking = true;
+    await flutterTts.stop();
+    await flutterTts.speak(word);
+
+    flutterTts.setCompletionHandler(() {
+      isSpeaking = false;
+    });
   }
 
   void generateLevelQuestions() {
     questions = List.generate(10, (_) {
       switch (widget.gameType) {
         case "Word Match":
-          return {"pairs": GameEngine.generateWordMatch(selectedLanguage)};
+          return {"pairs": GameEngine.generateWordMatch(widget.language)};
         case "Guess the Word":
-          return GameEngine.generateGuessWord(selectedLanguage);
+          return GameEngine.generateGuessWord(widget.language);
+        case "Audio Guess":
+          final q = GameEngine.generateAudioGuess(widget.language);
+          // Play the word automatically
+          flutterTts.setLanguage(languageCode()); // see helper below
+          flutterTts.speak(q['answer']); // speak the correct word
+          return q;
+        case "Timed Quiz":
+          return GameEngine.generateTimedQuiz(widget.language);
         case "Fill in the Blank":
           final word = GameEngine.getRandomWords(1)[0];
-          final languages = word['translations'].keys.where((l) => l != "English").toList();
-          languages.shuffle();
-          final lang = languages.first;
           return {
-            "sentence": 'Translate "${word['translations'][lang]}" ($lang) to English:',
+            "sentence": 'Translate "${word['translations'][widget.language]}" (${widget.language}) to English:',
             "answer": word['translations']["English"]
           };
-        case "Audio Guess":
-          return GameEngine.generateAudioGuess(selectedLanguage);
-        case "Timed Quiz":
-          return GameEngine.generateTimedQuiz(selectedLanguage);
         default:
           return {};
       }
@@ -22615,6 +22686,7 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
         levelCompleted = true;
         _confettiController.play();
       });
+      saveGameProgress(widget.gameType, level);
       stopTimer();
     } else {
       setState(() {
@@ -22662,6 +22734,7 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
 
   @override
   void dispose() {
+    flutterTts.stop();
     _confettiController.dispose();
     timer?.cancel();
     super.dispose();
@@ -22670,6 +22743,9 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
   @override
   Widget build(BuildContext context) {
     if (levelCompleted) {
+      final Map<String, dynamic> currentQuestion =
+      questions[questionIndex];
+
       return Scaffold(
         appBar: AppBar(title: Text("${widget.gameType} - Level $level"), backgroundColor: Colors.teal),
         body: Center(
@@ -22697,82 +22773,74 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
     switch (widget.gameType) {
       case "Word Match":
         Map<String, String> pairs = Map<String, String>.from(currentQuestion["pairs"]);
-        List<String> remainingWords = pairs.keys.toList();
+        List<String> leftWords = pairs.keys.toList();
+        List<String> rightWords = pairs.values.toList()..shuffle();
         String selectedWord = "";
         String message = "";
 
         gameUI = StatefulBuilder(builder: (context, setLocalState) {
           return Column(
             children: [
-              ...remainingWords.map((word) {
-                return Row(
-                  children: [
-                    Expanded(
-                      child: Card(
-                        color: Colors.teal.shade50,
-                        margin: const EdgeInsets.all(4),
-                        child: ListTile(
-                          title: Text(word, style: const TextStyle(fontSize: 18)),
-                          onTap: () {
-                            setLocalState(() {
-                              selectedWord = word;
-                              message = "";
-                              showCorrectAnswer = false;
-                            });
-                          },
-                        ),
-                      ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: leftWords.map((word) {
+                        return Card(
+                          color: Colors.teal.shade50,
+                          margin: const EdgeInsets.all(4),
+                          child: ListTile(
+                            title: Text(word, style: const TextStyle(fontSize: 18)),
+                            onTap: () {
+                              setLocalState(() {
+                                selectedWord = word;
+                                message = "";
+                                showCorrectAnswer = false;
+                              });
+                            },
+                          ),
+                        );
+                      }).toList(),
                     ),
-                    Expanded(
-                      child: Column(
-                        children: pairs.values.map((meaning) {
-                          return Card(
-                            color: Colors.green.shade50,
-                            margin: const EdgeInsets.all(4),
-                            child: ListTile(
-                              title: Text(meaning, style: const TextStyle(fontSize: 18)),
-                              onTap: () {
-                                if (selectedWord.isEmpty) return;
-                                setLocalState(() {
-                                  if (pairs[selectedWord] == meaning) {
-                                    message = "✅ Correct!";
-                                    pairs.remove(selectedWord);
-                                    remainingWords.remove(selectedWord);
-                                    selectedWord = "";
-                                    if (pairs.isEmpty) nextQuestion(true);
-                                  } else {
-                                    message = "❌ Try again";
-                                    showCorrectAnswer = true;
-                                    correctAnswer = pairs[selectedWord]!;
-                                  }
-                                });
-                              },
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      children: rightWords.map((meaning) {
+                        return Card(
+                          color: Colors.green.shade50,
+                          margin: const EdgeInsets.all(4),
+                          child: ListTile(
+                            title: Text(meaning, style: const TextStyle(fontSize: 18)),
+                            onTap: () {
+                              if (selectedWord.isEmpty) return;
+                              setLocalState(() {
+                                if (pairs[selectedWord] == meaning) {
+                                  message = "✅ Correct!";
+                                  leftWords.remove(selectedWord);
+                                  rightWords.remove(meaning);
+                                  pairs.remove(selectedWord);
+                                  selectedWord = "";
+                                  if (pairs.isEmpty) nextQuestion(true);
+                                } else {
+                                  message = "❌ Wrong! Correct: ${pairs[selectedWord]}";
+                                  showCorrectAnswer = true;
+                                  correctAnswer = pairs[selectedWord]!;
+                                }
+                              });
+                            },
+                          ),
+                        );
+                      }).toList(),
                     ),
-                  ],
-                );
-              }),
-              const SizedBox(height: 20),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
               Text(message, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               if (showCorrectAnswer)
-                Column(
-                  children: [
-                    Text("Correct Answer: $correctAnswer", style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          questionIndex++;
-                          showCorrectAnswer = false;
-                        });
-                      },
-                      child: const Text("Next Question →"),
-                    ),
-                  ],
-                ),
+                Text("Correct Answer: $correctAnswer", style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)),
             ],
           );
         });
@@ -22812,8 +22880,57 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
         );
         break;
 
-      case "Guess the Word":
       case "Audio Guess":
+        List<String> options =
+        List<String>.from(currentQuestion["options"]);
+        String answer = currentQuestion["answer"];
+
+        gameUI = Column(
+          children: [
+            ElevatedButton.icon(
+              icon: const Icon(Icons.volume_up),
+              label: const Text("Play Audio"),
+              onPressed: () async {
+                await flutterTts.stop(); // 🔥 stops repeat bug
+                flutterTts.setLanguage(languageCode());
+                flutterTts.speak(answer);
+              },
+            ),
+            const SizedBox(height: 16),
+            ...options.map((option) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade100, foregroundColor: Colors.black),
+                onPressed: () => nextQuestion(option == answer),
+                child: Text(option, style: const TextStyle(fontSize: 18)),
+              ),
+            )),
+            if (showCorrectAnswer)
+              Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Text(
+                      "Correct Answer: $correctAnswer",
+                      style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)
+                  ),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        questionIndex++;
+                        showCorrectAnswer = false;
+                        if (widget.gameType == "Timed Quiz") startTimer();
+                      });
+                    },
+                    child: const Text("Next Question →"),
+                  ),
+                ],
+              ),
+          ],
+        );
+        break;
+
+      case "Guess the Word":
         List<String> options = List<String>.from(currentQuestion["options"]);
         String answer = currentQuestion["answer"];
         String? sound = currentQuestion["sound"];
@@ -22912,4 +23029,187 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
     );
   }
 }
+
+/* ================= GAMES PROGRESS CARD ================= */
+class GamesProgressCard extends StatefulWidget {
+  final String selectedLanguage;
+  const GamesProgressCard({super.key, required this.selectedLanguage});
+
+  @override
+  State<GamesProgressCard> createState() => _GamesProgressCardState();
+}
+
+class _GamesProgressCardState extends State<GamesProgressCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+
+  // List of game names
+  final List<String> gameNames = [
+    "Word Match",
+    "Guess the Word",
+    "Fill in the Blank",
+    "Audio Guess",
+    "Timed Quiz"
+  ];
+
+  // Map to hold progress: { "Word Match": {"level": 1, "score": 0}, ... }
+  Map<String, Map<String, int>> gamesProgress = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 800));
+    _animationController.forward();
+
+    // Load progress on init
+    loadAllProgress();
+  }
+
+  Future<void> loadAllProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    final Map<String, Map<String, int>> loaded = {};
+    for (var game in gameNames) {
+      final keyLevel = "progress_${widget.selectedLanguage}_$game-level";
+      final keyScore = "progress_${widget.selectedLanguage}_$game-score";
+      loaded[game] = {
+        "level": prefs.getInt(keyLevel) ?? 1,
+        "score": prefs.getInt(keyScore) ?? 0,
+      };
+    }
+    setState(() {
+      gamesProgress = loaded;
+    });
+  }
+
+  Future<void> saveProgress(String game, int level, int score) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt("progress_${widget.selectedLanguage}_$game-level", level);
+    await prefs.setInt("progress_${widget.selectedLanguage}_$game-score", score);
+    // Update in-memory map too
+    setState(() {
+      gamesProgress[game]?["level"] = level;
+      gamesProgress[game]?["score"] = score;
+    });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      color: Colors.orange.shade50,
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => GamesScreen(language: widget.selectedLanguage),
+            ),
+          ).then((_) {
+            // Refresh progress when returning
+            loadAllProgress();
+          });
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: const [
+                  Icon(Icons.bar_chart, size: 40, color: Colors.deepOrange),
+                  SizedBox(width: 8),
+                  Text(
+                    "Games Progress",
+                    style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ...gamesProgress.entries.map((entry) {
+                String game = entry.key;
+                int level = entry.value["level"] ?? 1;
+                int score = entry.value["score"] ?? 0;
+                double progressPercent = (score / 10).clamp(0, 1).toDouble();
+
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: FadeTransition(
+                    opacity: _animationController,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(game,
+                                style: const TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.w600)),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.teal.shade200,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text("Lvl $level",
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade400,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text("Score $score",
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            )
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: LinearProgressIndicator(
+                            value: progressPercent,
+                            minHeight: 12,
+                            backgroundColor: Colors.grey.shade300,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.orange.shade400),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
 
