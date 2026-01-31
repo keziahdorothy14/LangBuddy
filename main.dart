@@ -3,6 +3,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:math';
+import 'dart:async';
+import 'package:confetti/confetti.dart'; // Add confetti animation
 
 const Map<String, String> ttsLanguages = {
   "English": "en-US",
@@ -21796,7 +21798,7 @@ class _HomeScreenState extends State<HomeScreen> {
               // Choose Language Label
               Text(
                 "Choose Language",
-                 style: const TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 18,
                   fontWeight: FontWeight.w500,
@@ -21861,6 +21863,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             () => open(context, QuizScreen(language: selectedLanguage))),
                     _buildCard(Icons.bar_chart, "Progress",
                             () => open(context, const ProgressScreen())),
+                    _buildCard(Icons.videogame_asset, "Games",
+                            () => open(context, const GamesScreen())),
                   ],
                 ),
               ),
@@ -22395,3 +22399,517 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
+
+/* ================= GLOBAL SELECTED LANGUAGE ================= */
+String selectedLanguage = "French"; // Set this from homescreen
+
+/* ================= GAME ENGINE ================= */
+class GameEngine {
+  static final _random = Random();
+
+  static List<Map<String, dynamic>> getRandomWords(int count) {
+    final shuffled = List<Map<String, dynamic>>.from(vocabularyData)..shuffle(_random);
+    return shuffled.take(count).toList();
+  }
+
+  static Map<String, String> generateWordMatch(String language) {
+    final words = getRandomWords(4);
+    final Map<String, String> pairs = {};
+    for (var w in words) {
+      pairs[w['word']] = w['translations'][language] ?? w['word'];
+    }
+    return pairs;
+  }
+
+  static Map<String, dynamic> generateGuessWord(String language) {
+    final words = getRandomWords(4);
+    return {
+      "answer": words[0]['translations']["English"],
+      "options": words.map((w) => w['translations'][language] ?? w['word']).toList()
+    };
+  }
+
+  static Map<String, dynamic> generateAudioGuess(String language) {
+    final words = getRandomWords(4);
+    return {
+      "answer": words[0]['translations']["English"],
+      "options": words.map((w) => w['translations'][language] ?? w['word']).toList(),
+      "sound": "🔊 ${words[0]['translations'][language][0]}..."
+    };
+  }
+
+  static Map<String, dynamic> generateTimedQuiz(String language) {
+    final words = getRandomWords(4);
+    return {
+      "question": "What is the English word for ${words[0]['translations'][language]}?",
+      "answer": words[0]['translations']["English"],
+      "options": words.map((w) => w['translations']["English"]).toList()
+    };
+  }
+}
+
+/* ================= GAMES SCREEN ================= */
+class GamesScreen extends StatelessWidget {
+  const GamesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final games = [
+      {"title": "Word Match", "widget": LevelGameWidget(gameType: "Word Match")},
+      {"title": "Guess the Word", "widget": LevelGameWidget(gameType: "Guess the Word")},
+      {"title": "Fill in the Blank", "widget": LevelGameWidget(gameType: "Fill in the Blank")},
+      {"title": "Audio Guess", "widget": LevelGameWidget(gameType: "Audio Guess")},
+      {"title": "Timed Quiz", "widget": LevelGameWidget(gameType: "Timed Quiz")},
+    ];
+
+    return Scaffold(
+      appBar: AppBar(title: const Text("Games"), backgroundColor: Colors.teal),
+      body: GridView.count(
+        crossAxisCount: 2,
+        padding: const EdgeInsets.all(16),
+        crossAxisSpacing: 16,
+        mainAxisSpacing: 16,
+        children: games.map((g) {
+          return Card(
+            color: Colors.teal.shade100,
+            elevation: 6,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => g["widget"] as Widget),
+                );
+              },
+              child: Center(
+                child: Text(
+                  g["title"] as String,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+/* ================= LEVEL GAME WIDGET ================= */
+class LevelGameWidget extends StatefulWidget {
+  final String gameType;
+  const LevelGameWidget({super.key, required this.gameType});
+  @override
+  State<LevelGameWidget> createState() => _LevelGameWidgetState();
+}
+
+class _LevelGameWidgetState extends State<LevelGameWidget> {
+  int level = 1;
+  int questionIndex = 0;
+  int score = 0;
+  late List<Map<String, dynamic>> questions;
+  bool levelCompleted = false;
+
+  // Correct answer feedback
+  bool showCorrectAnswer = false;
+  String correctAnswer = "";
+
+  // Timer for timed quiz
+  int timeLeft = 15;
+  Timer? timer;
+
+  late ConfettiController _confettiController;
+
+  @override
+  void initState() {
+    super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 2));
+    generateLevelQuestions();
+  }
+
+  void generateLevelQuestions() {
+    questions = List.generate(10, (_) {
+      switch (widget.gameType) {
+        case "Word Match":
+          return {"pairs": GameEngine.generateWordMatch(selectedLanguage)};
+        case "Guess the Word":
+          return GameEngine.generateGuessWord(selectedLanguage);
+        case "Fill in the Blank":
+          final word = GameEngine.getRandomWords(1)[0];
+          final languages = word['translations'].keys.where((l) => l != "English").toList();
+          languages.shuffle();
+          final lang = languages.first;
+          return {
+            "sentence": 'Translate "${word['translations'][lang]}" ($lang) to English:',
+            "answer": word['translations']["English"]
+          };
+        case "Audio Guess":
+          return GameEngine.generateAudioGuess(selectedLanguage);
+        case "Timed Quiz":
+          return GameEngine.generateTimedQuiz(selectedLanguage);
+        default:
+          return {};
+      }
+    });
+
+    questionIndex = 0;
+    score = 0;
+    levelCompleted = false;
+    showCorrectAnswer = false;
+    if (widget.gameType == "Timed Quiz") startTimer();
+  }
+
+  void startTimer() {
+    timer?.cancel();
+    timeLeft = 15;
+    timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      setState(() {
+        if (timeLeft > 0) {
+          timeLeft--;
+        } else {
+          t.cancel();
+          showCorrectAnswer = true;
+          correctAnswer = getCorrectAnswerForCurrentQuestion();
+        }
+      });
+    });
+  }
+
+  void stopTimer() {
+    timer?.cancel();
+  }
+
+  String getCorrectAnswerForCurrentQuestion() {
+    final q = questions[questionIndex];
+    switch (widget.gameType) {
+      case "Word Match":
+        return q['pairs'].values.first;
+      case "Fill in the Blank":
+      case "Guess the Word":
+      case "Audio Guess":
+      case "Timed Quiz":
+        return q['answer'];
+      default:
+        return "";
+    }
+  }
+
+  void nextQuestion(bool correct) {
+    if (correct) score++;
+    if (!correct) {
+      setState(() {
+        showCorrectAnswer = true;
+        correctAnswer = getCorrectAnswerForCurrentQuestion();
+      });
+      return;
+    }
+
+    if (questionIndex + 1 >= questions.length) {
+      setState(() {
+        levelCompleted = true;
+        _confettiController.play();
+      });
+      stopTimer();
+    } else {
+      setState(() {
+        questionIndex++;
+        showCorrectAnswer = false;
+        if (widget.gameType == "Timed Quiz") startTimer();
+      });
+    }
+  }
+
+  void nextLevel() {
+    setState(() {
+      level++;
+      generateLevelQuestions();
+    });
+  }
+
+  Widget buildProgressBar() {
+    double progress = (questionIndex + 1) / questions.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Stack(
+        children: [
+          Container(
+            height: 20,
+            decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(12)),
+          ),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            height: 20,
+            width: MediaQuery.of(context).size.width * progress - 32,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Colors.teal, Colors.greenAccent]),
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+          Positioned.fill(
+              child: Center(
+                child: Text("${questionIndex + 1} / ${questions.length}", style: const TextStyle(fontWeight: FontWeight.bold)),
+              )),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (levelCompleted) {
+      return Scaffold(
+        appBar: AppBar(title: Text("${widget.gameType} - Level $level"), backgroundColor: Colors.teal),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ConfettiWidget(confettiController: _confettiController, blastDirectionality: BlastDirectionality.explosive),
+              Text("🎉 Level $level Completed!", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              Text("Score: $score / ${questions.length}", style: const TextStyle(fontSize: 20)),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                onPressed: nextLevel,
+                child: Text("Next Level → Level ${level + 1}", style: const TextStyle(fontSize: 16)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final currentQuestion = questions[questionIndex];
+    Widget gameUI;
+
+    switch (widget.gameType) {
+      case "Word Match":
+        Map<String, String> pairs = Map<String, String>.from(currentQuestion["pairs"]);
+        List<String> remainingWords = pairs.keys.toList();
+        String selectedWord = "";
+        String message = "";
+
+        gameUI = StatefulBuilder(builder: (context, setLocalState) {
+          return Column(
+            children: [
+              ...remainingWords.map((word) {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: Card(
+                        color: Colors.teal.shade50,
+                        margin: const EdgeInsets.all(4),
+                        child: ListTile(
+                          title: Text(word, style: const TextStyle(fontSize: 18)),
+                          onTap: () {
+                            setLocalState(() {
+                              selectedWord = word;
+                              message = "";
+                              showCorrectAnswer = false;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: pairs.values.map((meaning) {
+                          return Card(
+                            color: Colors.green.shade50,
+                            margin: const EdgeInsets.all(4),
+                            child: ListTile(
+                              title: Text(meaning, style: const TextStyle(fontSize: 18)),
+                              onTap: () {
+                                if (selectedWord.isEmpty) return;
+                                setLocalState(() {
+                                  if (pairs[selectedWord] == meaning) {
+                                    message = "✅ Correct!";
+                                    pairs.remove(selectedWord);
+                                    remainingWords.remove(selectedWord);
+                                    selectedWord = "";
+                                    if (pairs.isEmpty) nextQuestion(true);
+                                  } else {
+                                    message = "❌ Try again";
+                                    showCorrectAnswer = true;
+                                    correctAnswer = pairs[selectedWord]!;
+                                  }
+                                });
+                              },
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+              const SizedBox(height: 20),
+              Text(message, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              if (showCorrectAnswer)
+                Column(
+                  children: [
+                    Text("Correct Answer: $correctAnswer", style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          questionIndex++;
+                          showCorrectAnswer = false;
+                        });
+                      },
+                      child: const Text("Next Question →"),
+                    ),
+                  ],
+                ),
+            ],
+          );
+        });
+        break;
+
+      case "Fill in the Blank":
+        TextEditingController controller = TextEditingController();
+        String answer = currentQuestion["answer"];
+        gameUI = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(currentQuestion["sentence"], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            TextField(controller: controller, decoration: const InputDecoration(border: OutlineInputBorder(), hintText: "Type English word here")),
+            const SizedBox(height: 10),
+            ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal),
+                onPressed: () => nextQuestion(controller.text.trim().toLowerCase() == answer.toLowerCase()),
+                child: const Text("Submit", style: TextStyle(fontSize: 16))),
+            if (showCorrectAnswer)
+              Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Text("Correct Answer: $correctAnswer", style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          questionIndex++;
+                          showCorrectAnswer = false;
+                        });
+                      },
+                      child: const Text("Next Question →")),
+                ],
+              ),
+          ],
+        );
+        break;
+
+      case "Guess the Word":
+      case "Audio Guess":
+        List<String> options = List<String>.from(currentQuestion["options"]);
+        String answer = currentQuestion["answer"];
+        String? sound = currentQuestion["sound"];
+        gameUI = Column(
+          children: [
+            if (sound != null) Text(sound, style: const TextStyle(fontSize: 40)),
+            const SizedBox(height: 10),
+            ...options.map((option) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade100, foregroundColor: Colors.black),
+                  onPressed: () => nextQuestion(option == answer),
+                  child: Text(option, style: const TextStyle(fontSize: 18))),
+            )),
+            if (showCorrectAnswer)
+              Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Text("Correct Answer: $correctAnswer", style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          questionIndex++;
+                          showCorrectAnswer = false;
+                        });
+                      },
+                      child: const Text("Next Question →")),
+                ],
+              ),
+          ],
+        );
+        break;
+
+      case "Timed Quiz":
+        List<String> options = List<String>.from(currentQuestion["options"]);
+        String answer = currentQuestion["answer"];
+        String questionText = currentQuestion["question"] ?? "";
+        gameUI = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(questionText, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text("⏱ $timeLeft s", style: const TextStyle(fontSize: 18, color: Colors.red, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...options.map((option) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.teal.shade100, foregroundColor: Colors.black),
+                  onPressed: () => nextQuestion(option == answer),
+                  child: Text(option, style: const TextStyle(fontSize: 18))),
+            )),
+            if (showCorrectAnswer)
+              Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Text("Correct Answer: $correctAnswer", style: const TextStyle(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          questionIndex++;
+                          showCorrectAnswer = false;
+                          if (widget.gameType == "Timed Quiz") startTimer();
+                        });
+                      },
+                      child: const Text("Next Question →")),
+                ],
+              ),
+          ],
+        );
+        break;
+
+      default:
+        gameUI = const SizedBox();
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: Text("${widget.gameType} - Level $level"), backgroundColor: Colors.teal),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              buildProgressBar(),
+              const SizedBox(height: 16),
+              gameUI,
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
