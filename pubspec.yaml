@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
     
   confetti: ^0.6.0
+  package_info_plus: ^5.0.1
   # Text-to-Speech
   flutter_tts: ^3.8.0
 
