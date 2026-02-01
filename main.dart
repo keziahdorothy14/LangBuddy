@@ -4,7 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:math';
 import 'dart:async';
-import 'package:confetti/confetti.dart'; // Add confetti animation
+import 'package:confetti/confetti.dart';// Add confetti animation
+import 'package:package_info_plus/package_info_plus.dart';
 
 // ================= GAME PROGRESS STORAGE =================
 Future<void> saveGameProgress(String gameName, int level) async {
@@ -21881,7 +21882,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         context, VocabularyScreen(language: selectedLanguage))),
                     _buildCard(Icons.quiz, "Quiz",
                             () => open(context, QuizScreen(language: selectedLanguage))),
-                    _buildCard(Icons.bar_chart, "Progress",
+                    _buildCard(Icons.bar_chart, "Quiz Progress",
                             () => open(context, const ProgressScreen())),
                     _buildCard(
                       Icons.videogame_asset,
@@ -21892,11 +21893,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                     _buildCard(
-                      Icons.bar_chart,
-                      "Games Progress",
-                          () => open(
-                        context,
-                        GamesProgressCard(selectedLanguage: selectedLanguage), // ✅ pass language
+                      Icons.help_outline,
+                      "About",
+                          () => showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => const AboutSheet(),
                       ),
                     ),
                   ],
@@ -22482,7 +22485,9 @@ class GameEngine {
 /* ================= GAMES SCREEN ================= */
 class GamesScreen extends StatelessWidget {
   final String language;
-  const GamesScreen({super.key, required this.language});
+  GamesScreen({super.key, required this.language});
+  bool enableAudioGuess = false; // Set to false to hide the game
+
 
   @override
   Widget build(BuildContext context) {
@@ -22490,7 +22495,8 @@ class GamesScreen extends StatelessWidget {
       {"title": "Word Match", "widget": LevelGameWidget(gameType: "Word Match", language: language)},
       {"title": "Guess the Word", "widget": LevelGameWidget(gameType: "Guess the Word", language: language)},
       {"title": "Fill in the Blank", "widget": LevelGameWidget(gameType: "Fill in the Blank", language: language)},
-      {"title": "Audio Guess", "widget": LevelGameWidget(gameType: "Audio Guess", language: language)},
+      if (enableAudioGuess)
+        {"title": "Audio Guess", "widget": LevelGameWidget(gameType: "Audio Guess", language: language)},
       {"title": "Timed Quiz", "widget": LevelGameWidget(gameType: "Timed Quiz", language: language)},
     ];
 
@@ -22597,6 +22603,7 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
     isSpeaking = true;
     await flutterTts.stop();
     await flutterTts.speak(word);
+    await flutterTts.setSpeechRate(0.4);
 
     flutterTts.setCompletionHandler(() {
       isSpeaking = false;
@@ -23030,186 +23037,170 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
   }
 }
 
-/* ================= GAMES PROGRESS CARD ================= */
-class GamesProgressCard extends StatefulWidget {
-  final String selectedLanguage;
-  const GamesProgressCard({super.key, required this.selectedLanguage});
+/* ================= ABOUT SCREEN ================= */
 
-  @override
-  State<GamesProgressCard> createState() => _GamesProgressCardState();
-}
-
-class _GamesProgressCardState extends State<GamesProgressCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-
-  // List of game names
-  final List<String> gameNames = [
-    "Word Match",
-    "Guess the Word",
-    "Fill in the Blank",
-    "Audio Guess",
-    "Timed Quiz"
-  ];
-
-  // Map to hold progress: { "Word Match": {"level": 1, "score": 0}, ... }
-  Map<String, Map<String, int>> gamesProgress = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
-    _animationController.forward();
-
-    // Load progress on init
-    loadAllProgress();
-  }
-
-  Future<void> loadAllProgress() async {
-    final prefs = await SharedPreferences.getInstance();
-    final Map<String, Map<String, int>> loaded = {};
-    for (var game in gameNames) {
-      final keyLevel = "progress_${widget.selectedLanguage}_$game-level";
-      final keyScore = "progress_${widget.selectedLanguage}_$game-score";
-      loaded[game] = {
-        "level": prefs.getInt(keyLevel) ?? 1,
-        "score": prefs.getInt(keyScore) ?? 0,
-      };
-    }
-    setState(() {
-      gamesProgress = loaded;
-    });
-  }
-
-  Future<void> saveProgress(String game, int level, int score) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt("progress_${widget.selectedLanguage}_$game-level", level);
-    await prefs.setInt("progress_${widget.selectedLanguage}_$game-score", score);
-    // Update in-memory map too
-    setState(() {
-      gamesProgress[game]?["level"] = level;
-      gamesProgress[game]?["score"] = score;
-    });
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
+class AboutSheet extends StatelessWidget {
+  const AboutSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      color: Colors.orange.shade50,
-      elevation: 6,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => GamesScreen(language: widget.selectedLanguage),
-            ),
-          ).then((_) {
-            // Refresh progress when returning
-            loadAllProgress();
-          });
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: const [
-                  Icon(Icons.bar_chart, size: 40, color: Colors.deepOrange),
-                  SizedBox(width: 8),
-                  Text(
-                    "Games Progress",
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              ...gamesProgress.entries.map((entry) {
-                String game = entry.key;
-                int level = entry.value["level"] ?? 1;
-                int score = entry.value["score"] ?? 0;
-                double progressPercent = (score / 10).clamp(0, 1).toDouble();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: FadeTransition(
-                    opacity: _animationController,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(game,
-                                style: const TextStyle(
-                                    fontSize: 16, fontWeight: FontWeight.w600)),
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.teal.shade200,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text("Lvl $level",
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold)),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade400,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text("Score $score",
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold)),
-                                ),
-                              ],
-                            )
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: LinearProgressIndicator(
-                            value: progressPercent,
-                            minHeight: 12,
-                            backgroundColor: Colors.grey.shade300,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.orange.shade400),
-                          ),
-                        ),
-                      ],
-                    ),
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      maxChildSize: 0.9,
+      minChildSize: 0.4,
+      builder: (_, controller) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF121212) : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: ListView(
+            controller: controller,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Center(
+                child: Container(
+                  width: 50,
+                  height: 5,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade500,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                );
-              }).toList(),
+                ),
+              ),
+
+              Text(
+                "LangBuddy",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.tealAccent : Colors.teal.shade800,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                "Learn languages through play",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              _aboutTile(
+                icon: Icons.extension,
+                title: "Auto-Generated Games",
+                desc: "Games adapt instantly to your vocabulary data.",
+                isDark: isDark,
+              ),
+
+              _aboutTile(
+                icon: Icons.public,
+                title: "Multi-Language Support",
+                desc: "Practice with French, German, Spanish, Hindi & more.",
+                isDark: isDark,
+              ),
+
+              _aboutTile(
+                icon: Icons.emoji_events,
+                title: "Levels & Rewards",
+                desc: "Endless levels with progress tracking & rewards.",
+                isDark: isDark,
+              ),
+
+              const SizedBox(height: 24),
+
+              const AppCredits(),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  Widget _aboutTile({
+    required IconData icon,
+    required String title,
+    required String desc,
+    required bool isDark,
+  }) {
+    return Card(
+      elevation: 0,
+      color: isDark ? const Color(0xFF1E1E1E) : Colors.grey.shade100,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        leading: Icon(icon, color: Colors.teal),
+        title: Text(
+          title,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          desc,
+          style: const TextStyle(fontSize: 13),
         ),
       ),
     );
   }
 }
 
+class AppCredits extends StatefulWidget {
+  const AppCredits({super.key});
 
+  @override
+  State<AppCredits> createState() => _AppCreditsState();
+}
 
+class _AppCreditsState extends State<AppCredits> {
+  String version = "";
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    setState(() {
+      version = info.version;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      children: [
+        Divider(color: Colors.grey.shade600),
+        const SizedBox(height: 8),
+        Text(
+          "Version $version",
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Made with ❤️ for language learners",
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+          ),
+        ),
+      ],
+    );
+  }
+}
