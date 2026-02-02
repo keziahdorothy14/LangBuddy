@@ -8,11 +8,11 @@ import java.util.Properties
 
         android {
             namespace = "com.yourcompany.langbuddy"
-            compileSdk = 34  // or use flutter.compileSdkVersion if you prefer
+            compileSdk = 34
 
             defaultConfig {
                 applicationId = "com.yourcompany.langbuddy"
-                minSdk = flutter.minSdkVersion
+                minSdk = 21
                 targetSdk = 34
                 versionCode = 1
                 versionName = "1.0.0"
@@ -48,7 +48,7 @@ import java.util.Properties
                     isShrinkResources = false
                 }
                 getByName("debug") {
-                    // optional: you can also sign debug builds
+                    // default debug signing
                 }
             }
         }
