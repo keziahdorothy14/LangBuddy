@@ -22661,6 +22661,7 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
 
   void stopTimer() {
     timer?.cancel();
+    timer = null;
   }
 
   String getCorrectAnswerForCurrentQuestion() {
@@ -22701,6 +22702,23 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
         showCorrectAnswer = false;
         if (widget.gameType == "Timed Quiz") startTimer();
       });
+    }
+  }
+  void goToNextLevel() {
+    setState(() {
+      level++;
+      questionIndex = 0;
+      score = 0;
+      levelCompleted = false;
+      showCorrectAnswer = false;
+    });
+
+    _confettiController
+      ..stop()
+      ..play(); // 🎉 REPLAY CONFETTI
+
+    if (widget.gameType == "Timed Quiz") {
+      startTimer(); // ⏱ Restart timer safely
     }
   }
 
@@ -22750,26 +22768,41 @@ class _LevelGameWidgetState extends State<LevelGameWidget> {
   @override
   Widget build(BuildContext context) {
     if (levelCompleted) {
-      final Map<String, dynamic> currentQuestion =
-      questions[questionIndex];
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              "🎉 Level Completed!",
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              "Score: $score / ${questions.length}",
+              style: const TextStyle(fontSize: 18),
+            ),
+            const SizedBox(height: 30),
 
-      return Scaffold(
-        appBar: AppBar(title: Text("${widget.gameType} - Level $level"), backgroundColor: Colors.teal),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ConfettiWidget(confettiController: _confettiController, blastDirectionality: BlastDirectionality.explosive),
-              Text("🎉 Level $level Completed!", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              Text("Score: $score / ${questions.length}", style: const TextStyle(fontSize: 20)),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-                onPressed: nextLevel,
-                child: Text("Next Level → Level ${level + 1}", style: const TextStyle(fontSize: 16)),
+            // 🎊 Confetti Widget
+            ConfettiWidget(
+              confettiController: _confettiController,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              colors: const [Colors.green, Colors.blue, Colors.orange, Colors.pink],
+            ),
+
+            const SizedBox(height: 30),
+
+            // ▶ NEXT LEVEL BUTTON
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-            ],
-          ),
+              onPressed: goToNextLevel,
+              child: const Text("Next Level →", style: TextStyle(fontSize: 18)),
+            ),
+          ],
         ),
       );
     }
