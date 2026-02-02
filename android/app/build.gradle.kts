@@ -29,7 +29,7 @@ import java.util.Properties
 
             signingConfigs {
                 create("release") {
-                    val keystorePropertiesFile = rootProject.file("android/key.properties")
+                    val keystorePropertiesFile = rootProject.file("key.properties")
                     val keystoreProperties = Properties().apply {
                         load(keystorePropertiesFile.inputStream())
                     }
