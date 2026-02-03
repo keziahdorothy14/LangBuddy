@@ -9,6 +9,7 @@ import java.util.Properties
         android {
             namespace = "com.yourcompany.langbuddy"
             compileSdk = 34
+            ndkVersion = "27.0.12077973"
 
             defaultConfig {
                 applicationId = "com.yourcompany.langbuddy"
